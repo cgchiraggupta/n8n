@@ -231,8 +231,32 @@ function getInitialLeftPosition(width: number): number {
 }
 
 function setMainPanelWidth(relativeWidth?: number): void {
-	const mainPanelRelativeWidth =
-		relativeWidth || pxToRelativeWidth(initialMainPanelWidth[currentNodePaneType.value]);
+	let mainPanelRelativeWidth: number;
+
+	if (relativeWidth !== undefined) {
+		// Validate provided width
+		if (!Number.isFinite(relativeWidth) || relativeWidth <= 0 || relativeWidth > 1) {
+			// Use default if provided width is invalid
+			mainPanelRelativeWidth = pxToRelativeWidth(initialMainPanelWidth[currentNodePaneType.value]);
+		} else {
+			mainPanelRelativeWidth = relativeWidth;
+		}
+	} else {
+		mainPanelRelativeWidth = pxToRelativeWidth(initialMainPanelWidth[currentNodePaneType.value]);
+	}
+
+	// If container width is 0, use a safe default relative width
+	if (!containerWidth.value || containerWidth.value <= 0) {
+		// Use approximate default: 420px / 1200px ≈ 0.35
+		mainPanelRelativeWidth = currentNodePaneType.value === 'wide' ? 0.53 : 0.35;
+	} else if (
+		!Number.isFinite(mainPanelRelativeWidth) ||
+		mainPanelRelativeWidth <= 0 ||
+		mainPanelRelativeWidth > 1
+	) {
+		// Fallback to safe default if calculation resulted in invalid value
+		mainPanelRelativeWidth = currentNodePaneType.value === 'wide' ? 0.53 : 0.35;
+	}
 
 	ndvStore.setMainPanelDimensions({
 		panelType: currentNodePaneType.value,
@@ -294,10 +318,18 @@ function setPositionByName(position: 'minLeft' | 'maxRight' | 'initial') {
 }
 
 function pxToRelativeWidth(px: number): number {
+	if (!containerWidth.value || containerWidth.value <= 0) {
+		// Return 0 to prevent division by zero and Infinity values
+		return 0;
+	}
 	return px / containerWidth.value;
 }
 
 function relativeWidthToPx(relativeWidth: number) {
+	if (!containerWidth.value || containerWidth.value <= 0) {
+		// Return 0 when container width is not available
+		return 0;
+	}
 	return relativeWidth * containerWidth.value;
 }
 
@@ -330,6 +362,15 @@ function restorePositionData() {
 
 	if (storedPanelWidthData) {
 		const parsedWidth = parseFloat(storedPanelWidthData);
+
+		// Validate stored width to prevent NaN, Infinity, or invalid values
+		if (!Number.isFinite(parsedWidth) || parsedWidth <= 0 || parsedWidth > 1) {
+			// Clear corrupted data
+			useStorage(`${LOCAL_STORAGE_MAIN_PANEL_RELATIVE_WIDTH}_${currentNodePaneType.value}`).value =
+				'';
+			return false;
+		}
+
 		setMainPanelWidth(parsedWidth);
 		const initialPosition = getInitialLeftPosition(parsedWidth);
 
